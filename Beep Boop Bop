@@ -1,0 +1,245 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>BEEEEP</title>
+  <style>
+    body {
+      font-family: sans-serif;
+      text-align: center;
+      padding-top: 50px;
+      background-color: #f0f4f8;
+    }
+    input[type=range], input[type=number] {
+      width: 300px;
+    }
+    #decodedText {
+      margin-top: 20px;
+      font-size: 1.5em;
+      font-weight: bold;
+      color: #333;
+    }
+    #morseGuide {
+      margin-top: 40px;
+      background: white;
+      border-radius: 10px;
+      box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+      padding: 20px;
+      max-width: 800px;
+      margin-left: auto;
+      margin-right: auto;
+      font-size: 1.3em;
+      text-align: center;
+    }
+    #clearButton {
+      margin-top: 20px;
+      padding: 10px 20px;
+      font-size: 1em;
+      background-color: #d9534f;
+      color: white;
+      border: none;
+      border-radius: 5px;
+      cursor: pointer;
+    }
+    #clearButton:hover {
+      background-color: #c9302c;
+    }
+    .morse-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+      gap: 10px;
+      justify-items: center;
+    }
+  </style>
+</head>
+<body>
+  <h1>Beep Boop Bop</h1>
+ 
+
+  <label for="pitch">Pitch (Hz): </label>
+  <input type="range" id="pitch" min="100" max="18000" value="440">
+  <span id="pitchVal">440</span> Hz<br><br>
+
+  <label><input type="checkbox" id="queueToggle" checked> Enable Queue</label>
+  <label><input type="checkbox" id="queuePaused"> Pause Queue</label><br>
+  <label for="queueDelay">Delay: </label>
+  <input type="number" id="queueDelay" min="0" value="200"><br><br>
+
+  <label for="shortBeep">#1: </label>
+  <input type="number" id="shortBeep" min="10" value="200"><br>
+  <label for="longBeep">#2: </label>
+  <input type="number" id="longBeep" min="10" value="400"><br><br>
+
+  <div id="decodedText">Decoded: </div>
+  <button id="clearButton">Clear</button>
+
+  <div id="morseGuide">
+    <h3>Morse Code Guide</h3>
+    <div class="morse-grid">
+      <div>A .-</div><div>B -...</div><div>C -.-.</div><div>D -..</div><div>E .</div><div>F ..-.</div>
+      <div>G --.</div><div>H ....</div><div>I ..</div><div>J .---</div><div>K -.-</div><div>L .-..</div>
+      <div>M --</div><div>N -.</div><div>O ---</div><div>P .--.</div><div>Q --.-</div><div>R .-.</div>
+      <div>S ...</div><div>T -</div><div>U ..-</div><div>V ...-</div><div>W .--</div><div>X -..-</div>
+      <div>Y -.--</div><div>Z --..</div><div>1 .----</div><div>2 ..---</div><div>3 ...--</div><div>4 ....-</div>
+      <div>5 .....</div><div>6 -....</div><div>7 --...</div><div>8 ---..</div><div>9 ----.</div><div>0 -----</div>
+    </div>
+  </div>
+
+  <script>
+    const pitchSlider = document.getElementById('pitch');
+    const pitchVal = document.getElementById('pitchVal');
+    const queueToggle = document.getElementById('queueToggle');
+    const queuePausedToggle = document.getElementById('queuePaused');
+    const queueDelayInput = document.getElementById('queueDelay');
+    const shortBeepInput = document.getElementById('shortBeep');
+    const longBeepInput = document.getElementById('longBeep');
+    const decodedText = document.getElementById('decodedText');
+    const clearButton = document.getElementById('clearButton');
+
+    clearButton.onclick = () => {
+      decodedOutput = '';
+      morseBuffer = '';
+      decodedText.textContent = 'Decoded: ';
+    };
+
+    pitchSlider.oninput = () => pitchVal.textContent = pitchSlider.value;
+
+    const AudioContext = window.AudioContext || window.webkitAudioContext;
+    const context = new AudioContext();
+
+    let oscillator = null;
+    let isSpacePressed = false;
+    const queue = [];
+    let queuePlaying = false;
+    let morseBuffer = '';
+    let decodedOutput = '';
+
+    const morseMap = {
+      '.-':'A','-...':'B','-.-.':'C','-..':'D','.':'E','..-.':'F','--.':'G','....':'H','..':'I','.---':'J',
+      '-.-':'K','.-..':'L','--':'M','-.':'N','---':'O','.--.':'P','--.-':'Q','.-.':'R','...':'S','-':'T',
+      '..-':'U','...-':'V','.--':'W','-..-':'X','-.--':'Y','--..':'Z',
+      '.----':'1','..---':'2','...--':'3','....-':'4','.....':'5','-....':'6','--...':'7','---..':'8','----.':'9','-----':'0'
+    };
+
+    function decodeMorse() {
+      if (morseBuffer.length) {
+        decodedOutput += morseMap[morseBuffer] || '?';
+        morseBuffer = '';
+        decodedText.textContent = 'Decoded: ' + decodedOutput;
+      }
+    }
+
+    function wordBreak() {
+      decodeMorse();
+      decodedOutput += ' ';
+      decodedText.textContent = 'Decoded: ' + decodedOutput;
+    }
+
+    function playBeep(frequency, duration, symbol = '') {
+      return new Promise(resolve => {
+        if (symbol === '.' || symbol === '-') morseBuffer += symbol;
+        else if (symbol === '/') decodeMorse();
+        else if (symbol === '|') wordBreak();
+
+        if (frequency > 0) {
+          const osc = context.createOscillator();
+          const gain = context.createGain();
+          osc.type = 'sine';
+          osc.frequency.value = frequency;
+          osc.connect(gain);
+          gain.connect(context.destination);
+          osc.start();
+          setTimeout(() => {
+            osc.stop();
+            resolve();
+          }, duration);
+        } else {
+          setTimeout(resolve, duration);
+        }
+      });
+    }
+
+    async function processQueue() {
+      if (queuePlaying || queuePausedToggle.checked) return;
+      queuePlaying = true;
+      while (queue.length > 0 && !queuePausedToggle.checked) {
+        const action = queue.shift();
+        if (action.type === 'beep') {
+          await playBeep(action.freq, action.duration, action.symbol);
+        } else if (action.type === 'pause') {
+          if (action.duration === 1000) playBeep(0, 0, '|');
+          else playBeep(0, 0, '/');
+          await new Promise(res => setTimeout(res, action.duration));
+        }
+        await new Promise(res => setTimeout(res, parseInt(queueDelayInput.value)));
+      }
+      queuePlaying = false;
+    }
+
+    queuePausedToggle.addEventListener('change', () => {
+      if (!queuePausedToggle.checked) {
+        processQueue();
+      }
+    });
+
+    document.addEventListener('keydown', (e) => {
+      if (e.repeat) return;
+
+      const baseFreq = parseInt(pitchSlider.value);
+      const useQueue = queueToggle.checked;
+      const shortBeep = parseInt(shortBeepInput.value);
+      const longBeep = parseInt(longBeepInput.value);
+
+      function enqueueOrPlay(freq, duration, symbol = '') {
+        if (useQueue) {
+          queue.push({ type: 'beep', freq, duration, symbol });
+          processQueue();
+        } else {
+          playBeep(freq, duration, symbol);
+        }
+      }
+
+      switch (e.key) {
+        case ' ':
+          if (!isSpacePressed) {
+            isSpacePressed = true;
+            oscillator = context.createOscillator();
+            const gain = context.createGain();
+            oscillator.frequency.value = baseFreq;
+            oscillator.type = 'sine';
+            oscillator.connect(gain);
+            gain.connect(context.destination);
+            oscillator.start();
+          }
+          break;
+        case 'ArrowLeft':
+          enqueueOrPlay(baseFreq, longBeep, '-');
+          break;
+        case 'ArrowRight':
+          enqueueOrPlay(baseFreq, shortBeep, '.');
+          break;
+        case 'ArrowUp':
+          enqueueOrPlay(baseFreq + 100, shortBeep, '/');
+          break;
+        case 'ArrowDown':
+          if (useQueue) {
+            queue.push({ type: 'pause', duration: 1000 });
+            processQueue();
+          } else {
+            playBeep(0, 0, '|');
+            setTimeout(() => {}, 1000);
+          }
+          break;
+      }
+    });
+
+    document.addEventListener('keyup', (e) => {
+      if (e.key === ' ' && isSpacePressed) {
+        oscillator.stop();
+        oscillator = null;
+        isSpacePressed = false;
+      }
+    });
+  </script>
+</body>
+</html>
